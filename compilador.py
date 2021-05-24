@@ -1,13 +1,13 @@
 import xml.etree.ElementTree as ET
 import csv
 
-arquivo = list(open('config/tokens2.txt'))
-codigo  = list(open('config/codigo2.txt'))
-tree = ET.parse('config/tabParsing2.xml')
-root = tree.getroot()
+arquivo_tokens = list(open('configuracao/tks.txt'))
+codigo_programador  = list(open('configuracao/codigo.txt'))
+arvore = ET.parse('configuracao/parsing.xml')
+root = arvore.getroot()
 
-simbolos, estados, alcan, finais, vivos, tS, fitaSaida, fita, escopo, block = [], [], [], [], [], [], [], [], [], []
-gramatica, tabela, epTransicao, idxSymbolRedux = {}, {}, {}, {}
+block, vivos, alcan, regras_finais, fita, escopo, simbolos, estados, tabela_simbolos, fita_saida = [], [], [], [], [], [], [], [], [], []
+epTransicao, gramatica, simbolo_redu, tabela = {}, {}, {}, {}
 repeticao = 0
 
 
@@ -34,7 +34,7 @@ def buscar_vivos():
         buscar_vivos()  #chama novamente, mudando a flag no inicio da funcao
 
 
-def eliminar_incal():
+def eliminar_inalcansaveis():
     loop = {}
     loop.update(tabela)
     for regra in loop:
@@ -42,12 +42,12 @@ def eliminar_incal():
             del tabela[regra]
 
 
-def buscar_alcan(estado):
+def buscar_alcansaveis(estado):
     if estado not in alcan: #adiciona estado no alcan caso n esteja
         alcan.append(estado)
         for simbolo in tabela[estado]: #passa por cada simbolo de estado da tabela 
             if tabela[estado][simbolo] and tabela[estado][simbolo][0] not in alcan: #continua adicionando os simbolos em alcan
-                buscar_alcan(tabela[estado][simbolo][0])
+                buscar_alcansaveis(tabela[estado][simbolo][0])
 
 
 def encontrar_eps_set(e_transicoes):    #encontra os estados que possuem o epsilon
@@ -62,8 +62,8 @@ def eliminar_et():
     for regra in tabela:
         et_set = encontrar_eps_set(tabela[regra]['&'])
         for estado in et_set:
-            if estado in finais: #verifica se o estado que possui & está nos finais, se não está add
-                finais.append(regra)
+            if estado in regras_finais: #verifica se o estado que possui & está nos regras_finais, se não está add
+                regras_finais.append(regra)
             for simbolo in tabela[estado]:
                 for transicao in tabela[estado][simbolo]:   #verifica a transicao do estado e add na tabela caso ela não esteja
                     if transicao not in tabela[regra][simbolo]:
@@ -82,8 +82,8 @@ def criar_novos(nstates):
     for state in nstates:
         estadosjuntar = sorted(state.split(':'))
         for x in estadosjuntar:
-            if x in finais and state not in finais: #faz uma nova verificação se está nos finais, caso não esteja adiciona
-                finais.append(state)
+            if x in regras_finais and state not in regras_finais: #faz uma nova verificação se está nos regras_finais, caso não esteja adiciona
+                regras_finais.append(state)
             for simbolo in simbolos:
                 for transition in tabela[x][simbolo]:
                     if not tabela[state][simbolo].__contains__(transition): #verifica se existe na tabela e add caso não esteja
@@ -116,7 +116,7 @@ def determizinar():
         criar_novos(novosestados)
 
 
-def criar_af(): #cria automato finito
+def criar_automato_finitos(): #cria automato finito
     for x in gramatica:
         tabela[x] = {}
         estados.append(x)   #pega todos estados da lista de gramatica
@@ -127,10 +127,10 @@ def criar_af(): #cria automato finito
 
     for regra in gramatica:
         for producao in gramatica[regra]:
-            if len(producao) == 1 and producao.islower() and regra not in finais:
-                finais.append(regra)    #adiciona a regra nas regras finais caso seja = 1, minuscula e já n esteja nas finais
-            elif producao == '&' and regra not in finais:
-                finais.append(regra)    #adiciona $ nas finais
+            if len(producao) == 1 and producao.islower() and regra not in regras_finais:
+                regras_finais.append(regra)    #adiciona a regra nas regras regras_finais caso seja = 1, minuscula e já n esteja nas regras_finais
+            elif producao == '&' and regra not in regras_finais:
+                regras_finais.append(regra)    #adiciona $ nas regras_finais
             elif producao[0] == '<':
                 tabela[regra]['&'].append(producao.split('<')[1][:-1]) #remove <> da regra e adiciona o que tem entre eles
             elif producao != '&':
@@ -174,7 +174,7 @@ def tratar_token(token):
             iniregra = '<' + cp_token.upper() + '>'
             gramatica['S'] += str(token[x] + iniregra).split() #salva na gramatica as regras de tamanho 1
             gramatica[cp_token.upper()] = []
-            finais.append(cp_token.upper()) #salva na lista os tokens de tamanho 1
+            regras_finais.append(cp_token.upper()) #salva na lista os tokens de tamanho 1
         elif x == 0 and x != len(token)-1:
             iniregra = '<' + cp_token.upper() + '1>'
             gramatica['S'] += str(token[x] + iniregra).split()  #salva na gramatica as regras de tamanho maior que 1 / o inicio deles
@@ -182,7 +182,7 @@ def tratar_token(token):
             finregra = '<' + cp_token.upper() + '>'
             gramatica[cp_token.upper() + str(x)] = str(token[x] + finregra).split() #salva na gramatica as regras de tamanho maior que 1 / o fim deles
             gramatica[cp_token.upper()] = []
-            finais.append(cp_token.upper()) #salva na lista os tokens de tamanho maior que 1
+            regras_finais.append(cp_token.upper()) #salva na lista os tokens de tamanho maior que 1
         else:
             proxregra = '<' + cp_token.upper() + str(x+1) + '>'
             gramatica[cp_token.upper() + str(x)] = str(token[x] + proxregra).split() #salva na gramatica as regras de tamanho maior que 1 / o meio fim deles
@@ -195,7 +195,7 @@ def criar_csv():
         copydict.update(tabela)
         w.writerow(list(copydict['S'].keys()) + ['regra'])
         for x in copydict:
-            if x in finais:
+            if x in regras_finais:
                 copydict[x]['nomeregra'] = x + '&' #adiciona nome da regra concatenado com o epsilon
             else:
                 copydict[x]['nomeregra'] = x #se não for final, não concatena com o epsilon
@@ -218,18 +218,18 @@ def analisador_lexico():
     espacadores = [' ', '\n', '\t']
     operadores  = ['+', '-', '#', ';']
     id = 0
-    for idx, linha in enumerate(codigo): #pega numero da linha e código de cada linha
+    for idx, linha in enumerate(codigo_programador): #pega numero da linha e código de cada linha
         E = 'S'
         string = ''
         for char in linha:
             if char in operadores and string:   #caso lemos um operador e a string não está vazia
                 if string[-1] not in operadores:    #se o ultimo caracter não é um operador
-                    if E in finais: #a regra do caracter lido é um dos finais
-                        tS.append({'Line': idx, 'State': E, 'Label': string}) 
-                        fitaSaida.append(E) #adicionamos a regra na fita de saida
+                    if E in regras_finais: #a regra do caracter lido é um dos regras_finais
+                        tabela_simbolos.append({'Line': idx, 'State': E, 'Label': string}) 
+                        fita_saida.append(E) #adicionamos a regra na fita de saida
                     else:
-                        tS.append({'Line': idx, 'State': 'Error', 'Label': string})
-                        fitaSaida.append('Error')
+                        tabela_simbolos.append({'Line': idx, 'State': 'Error', 'Label': string})
+                        fita_saida.append('Error')
                     E = tabela['S'][char][0]    #mapeamento para a próxima estrutura de operadores
                     string = char
                     id += 1
@@ -240,12 +240,12 @@ def analisador_lexico():
                     else:
                         E = tabela[E][char][0]
             elif char in separadores and string:
-                if E in finais:
-                    tS.append({'Line': idx, 'State': E, 'Label': string}) #adiciona em tS linha, estado e descricao
-                    fitaSaida.append(E) #caso seja um final, adiciona na fita de saida
+                if E in regras_finais:
+                    tabela_simbolos.append({'Line': idx, 'State': E, 'Label': string}) #adiciona em tabela_simbolos linha, estado e descricao
+                    fita_saida.append(E) #caso seja um final, adiciona na fita de saida
                 else:
-                    tS.append({'Line': idx, 'State': 'Error', 'Label': string})
-                    fitaSaida.append('Error')
+                    tabela_simbolos.append({'Line': idx, 'State': 'Error', 'Label': string})
+                    fita_saida.append('Error')
                 E = 'S'
                 string = ''
                 id += 1
@@ -254,12 +254,12 @@ def analisador_lexico():
                     continue
                 if char not in separadores and char not in operadores and string:   #caso n seja um separador, operador e já exista algo na string
                     if string[-1] in operadores:    #caso não seja um separador ele somente incrementa na string
-                        if E in finais: #operado é um final
-                            tS.append({'Line': idx, 'State': E, 'Label': string})
-                            fitaSaida.append(E)
+                        if E in regras_finais: #operado é um final
+                            tabela_simbolos.append({'Line': idx, 'State': E, 'Label': string})
+                            fita_saida.append(E)
                         else:
-                            tS.append({'Line': idx, 'State': 'Error', 'Label': string})
-                            fitaSaida.append('Error')
+                            tabela_simbolos.append({'Line': idx, 'State': 'Error', 'Label': string})
+                            fita_saida.append('Error')
                         E = 'S'
                         string = ''
                         id += 1
@@ -268,10 +268,10 @@ def analisador_lexico():
                     E = '€'
                 else:
                     E = tabela[E][char][0]  #o E recebe a regra do caracter 
-    tS.append({'Line': idx, 'State': 'EOF', 'Label': ''})
-    fitaSaida.append('EOF')
+    tabela_simbolos.append({'Line': idx, 'State': 'EOF', 'Label': ''})
+    fita_saida.append('EOF')
     erro = False
-    for linha in tS:
+    for linha in tabela_simbolos:
         if linha['State'] == 'Error':   #caso exita erro léxico, imprime
             erro = True
             print('Erro léxico: linha {}, sentença "{}" não reconhecida!'.format(linha['Line']+1, linha['Label']))
@@ -280,11 +280,11 @@ def analisador_lexico():
 
 
 def mapeamento(symbols):
-    symbols_indexes = {}    # faz um "mapeamento reverso" { 'SymbolName': 'SymbolIndex' }
+    symbols_indexes = {}    #é feito um reverso com o index x name
     for index, symbol in enumerate(symbols):
         symbols_indexes[symbol['Name']] = str(index)
-        idxSymbolRedux[str(index)] = symbol['Name']
-    for fta in fitaSaida: #nos estados que eram nomes, sao alterados pelo indice para ser reconhecido sintaticamente
+        simbolo_redu[str(index)] = symbol['Name']
+    for fta in fita_saida: #nos estados que eram nomes, sao alterados pelo indice para ser reconhecido sintaticamente
         if fta == 'S1' or fta == 'ENQUANTO1:S1' or fta == 'IGUAL1:S1': 
             fta = 'VAR' 
         elif fta == 'S2':
@@ -293,7 +293,7 @@ def mapeamento(symbols):
             fta = 'EOF'
         fita.append(symbols_indexes[fta])
 
-    for line in tS: #troca S1 e S2 na fitaSaida por VAR e NUM
+    for line in tabela_simbolos: #troca S1 e S2 na fita_saida por VAR e NUM
         if line['State'] == 'S1' or line['State'] == 'ENQUANTO1:S1' or line['State'] == 'IGUAL1:S1':
             line['State'] = 'VAR'
         elif line['State'] == 'S2':
@@ -302,7 +302,7 @@ def mapeamento(symbols):
             line['State'] = 'EOF'
 
 
-def analisador_sintatico(): #aqui é lido o arquivo xml pelas suas tags, nome, type, etc
+def analisador_sintatico(): #aqui é lido o arquivo_tokens xml pelas suas tags, nome, type, etc
     redux_symbol, symbols, productions, lalr_table, pilha  = [], [], [], [], ['0']
 
     def charge():
@@ -337,7 +337,7 @@ def analisador_sintatico(): #aqui é lido o arquivo xml pelas suas tags, nome, t
             try:
                 action = lalr_table[int(pilha[0])][ultimo_fita] #busca pelas acoes e valores
             except:
-                print('Erro sintático: linha {}, sentença "{}" não reconhecida!'.format(tS[idx]['Line']+1, tS[idx]['Label']))
+                print('Erro sintático: linha {}, sentença "{}" não reconhecida!'.format(tabela_simbolos[idx]['Line']+1, tabela_simbolos[idx]['Label']))
                 exit()  #apresente o erro caso exista
                 break
 
@@ -362,17 +362,17 @@ def analisador_sintatico(): #aqui é lido o arquivo xml pelas suas tags, nome, t
         pilha_aux = [1]
         id = 1
         for symbol in redux_symbol:
-            if idxSymbolRedux[symbol] == 'CONDS':
+            if simbolo_redu[symbol] == 'CONDS':
                 id += 1
                 pilha_aux.insert(0, id)
                 block.append(pilha_aux[1])
-            elif idxSymbolRedux[symbol] == 'REP' or idxSymbolRedux[symbol] == 'COND':
+            elif simbolo_redu[symbol] == 'REP' or simbolo_redu[symbol] == 'COND':
                 pilha_aux.pop(0)
-            elif idxSymbolRedux[symbol] == 'RVAR':
+            elif simbolo_redu[symbol] == 'RVAR':
                 escopo.append(pilha_aux[0])
 
     def complete_ts():  #completa a tabela de simbolos
-        for token in tS:
+        for token in tabela_simbolos:
             if token['State'] == 'VAR': #se o token for VAR
                 token['Scope'] = escopo.pop(0)  # adiciona o escopo em que ela está
 
@@ -396,15 +396,15 @@ def analisador_semantico():
             return check_scope(block[scope_use-2], scope_dec)
 
 
-    for index, token in enumerate(tS):
-        if token['State'] == 'VAR' and tS[index-1]['State'] == 'DEF':
+    for index, token in enumerate(tabela_simbolos):
+        if token['State'] == 'VAR' and tabela_simbolos[index-1]['State'] == 'DEF':
             if token['Label'] in var_scope: #caso a variável já esteja declarada
                 error = True
                 print('Erro semântico: linha {}, variável "{}" já declarada!'.format(token['Line']+1, token['Label']))
             else:
                 var_scope[token['Label']] = token['Scope']  #adiciona o scopo da variavel
 
-        if token['State'] == 'VAR' and tS[index-1]['State'] != 'DEF':
+        if token['State'] == 'VAR' and tabela_simbolos[index-1]['State'] != 'DEF':
             if token['Label'] in var_scope:
                 if not check_scope(token['Scope'], var_scope[token['Label']]):  #se o escopo n for o mesmo do declarado, erro
                     error = True
@@ -422,11 +422,11 @@ def codigo_intermediario():
     def encontra_operacoes():
         flag = False
         operacao = []
-        for idx, token in enumerate(tS):
-            if token['State'] == 'VAR' and tS[idx+1]['State'] == '#' and tS[idx+1]['State'] != ';':  #se for atribuicao de variavel, VAR # 1 ;
+        for idx, token in enumerate(tabela_simbolos):
+            if token['State'] == 'VAR' and tabela_simbolos[idx+1]['State'] == '#' and tabela_simbolos[idx+1]['State'] != ';':  #se for atribuicao de variavel, VAR # 1 ;
                 operacao.append(token['Label'])
                 flag = True
-            elif token['State'] == ';' and tS[idx-2]['State'] != 'DEF': #verifica se for definicao de variavel, def VAR;
+            elif token['State'] == ';' and tabela_simbolos[idx-2]['State'] != 'DEF': #verifica se for definicao de variavel, def VAR;
                 ts_code.append(operacao)
                 operacao = []
                 flag = False
@@ -478,8 +478,8 @@ def codigo_intermediario():
                 int_code.append(cod) #salva no código intermediario
 
     def exporta_codigo():
-        file = open('config/code_interr.txt', 'w+')
-        for x in int_code:  #exporta codigo intermediario para cada linha do arquivo
+        file = open('configuracao/codigo_intermediario.txt', 'w+')
+        for x in int_code:  #exporta codigo intermediario para cada linha do arquivo_tokens
             file.write(str(x).replace('[','').replace(']','').replace("'",'').replace(',','') +'\n')
 
     encontra_operacoes()
@@ -490,20 +490,20 @@ def codigo_intermediario():
 def main():
     gramatica['S'] = []
     estadoinicial = ''
-    for x in arquivo: #le o arquivo
+    for x in arquivo_tokens: #le o arquivo_tokens
         if '<S> ::=' in x:
             estadoinicial = x
         if '::=' in x:
             tratar_gramatica(x, estadoinicial) #funcao que trata a gramatica
         else:
             tratar_token(x) #trata os tokens e salva na regra da gramatica
-    criar_af()  
+    criar_automato_finitos()  
     eliminar_et()
     determizinar()
-    buscar_alcan('S')
-    eliminar_incal()
+    buscar_alcansaveis('S')
+    eliminar_inalcansaveis()
     estado_erro()
-    vivos.extend(finais)    #adiciona as regras finais ao vivos
+    vivos.extend(regras_finais)    #adiciona as regras regras_finais ao vivos
     buscar_vivos()
     eliminar_mortos()
     criar_csv()
@@ -511,7 +511,7 @@ def main():
     analisador_sintatico()
     analisador_semantico()
     codigo_intermediario()
-    print('Código compilado com sucesso!')
+    print('Compilado com sucesso!')
 
-print('\n' * 60)
+print('\n')
 main()
